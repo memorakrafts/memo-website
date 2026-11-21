@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   // trim() removes any space or newline accidentally pasted into Vercel.
   const scriptUrl = (process.env.GOOGLE_APPS_SCRIPT_URL || '').trim();
   if (!scriptUrl) {
-    console.error('GOOGLE_APPS_SCRIPT_URL is not set in Vercel environment variables.');
+    console.error('GOOGLE_APPS_SCRIPT_URL is not set.');
     return res.status(500).json({ success: false, message: 'Enquiry service is not configured yet.' });
   }
 
@@ -56,12 +56,21 @@ export default async function handler(req, res) {
 
     if (!upstream.ok || !result || result.success !== true) {
       console.error('Apps Script error:', upstream.status, body.slice(0, 400));
-      return res.status(502).json({ success: false, message: 'Your enquiry could not be saved. Please try again later.' });
+
+      let reason;
+      if (result && result.message) {
+        reason = result.message;
+      } else if (body.trim().startsWith('<')) {
+        reason = 'Apps Script returned a web page instead of data. Check that Who has access is set to Anyone.';
+      } else {
+        reason = `Apps Script returned HTTP ${upstream.status}.`;
+      }
+      return res.status(502).json({ success: false, message: `Could not save enquiry: ${reason}` });
     }
 
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('Enquiry submission error:', err);
-    return res.status(502).json({ success: false, message: 'Unable to reach the enquiry service.' });
+    return res.status(502).json({ success: false, message: `Could not reach the enquiry service: ${err.message}` });
   }
 }
